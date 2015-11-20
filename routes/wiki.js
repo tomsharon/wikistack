@@ -18,13 +18,35 @@ var User = models.User;
 
 router.get("/", function(req, res, next) {
 	//retrieve all wiki pages
-	res.redirect("/");
+	//display list of links to all wiki pages
+
+	// res.redirect("/");
+
+	Page.find({}).exec()
+		.then(function(arrayOfFoundPages){
+			res.render("index", {"pages": arrayOfFoundPages})
+		})
+		.then(null, next)
+
 })
+
 
 
 router.get("/add", function(req, res, next) {
 	//retrieve the "add a page" form
 	res.render("addpage");
+})
+
+
+
+router.get("/search", function(req, res, next) {
+	var tagToSearch = req.query.search;
+
+	Page.findByTag(tagToSearch)
+		.then(function(arrayOfFoundPagesWithThatTag){
+			res.render("index", {"pages": arrayOfFoundPagesWithThatTag})
+		})
+		.then(null, next)
 })
 
 
@@ -34,24 +56,41 @@ router.post("/", function(req, res, next) {
 	//Create a new page instance / document:
 	var page = new Page({
 		title: req.body.title,
-		content: req.body.pageContent
+		content: req.body.pageContent,
+		status: req.body.status,
+		tags: req.body.tags.split(" ")
 		// urlTitle: models.generateUrlTitle(req.body.title)
+
+		//Note that req.body contains the input for each field on
+		//add page. 
 	})
 
-	//Save Page and redirect home (validation occurs before save):
-	//By the way, within the save function, we also validate. 
-	//Meaning that before validation occurs we will generate 
-	//the proper urlTitle thanks to our pre-validate hook.
+	User.findOrCreate({authorName: req.body.authorName, authorEmail: req.body.authorEmail})
+		.then(function(user){
+			page.author = user._id;
+			return page.save();
+		})
+		.then(function(savedPage){
+			// res.json(savedPage);
+			// console.log("THIS IS SAVEDPAGE", savedPage)
+			res.redirect(savedPage.route)
+		})
+		.then(null, next)
 
-	//That is, new documents are never saved to the db without having 
-	//a urlTitle based on the title
-	page.save()
-	.then(
-		function(savedPage){
-			res.json(savedPage);
-		}, 
-		function(err) {
-			console.log(err)});
+
+	//Save Page and redirect home (validation occurs before save):
+	//By the way, within the save function, we also validate. Meaning that before validation occurs we will generate the proper urlTitle thanks to our pre-validate hook.
+
+
+	//To be clear, new documents are never saved to the db without 
+	//having a urlTitle based on the title
+	// page.save()
+	// .then(
+	// 	function(savedPage){
+	// 		// res.json(savedPage);
+	// 		res.redirect(savedPage.route)
+	// 	})
+	// .then(null, next)
 })
 
 
@@ -63,25 +102,31 @@ router.post("/", function(req, res, next) {
 router.get("/:pageName", function(req, res, next) {
 	var urlTitle = req.params.pageName
 
-
 	Page.findOne({"urlTitle": urlTitle}).exec()
 		.then(function(foundPage){
-			// res.json(foundPage);
-			res.render("wikipage", {"Page": foundPage})
-			console.log("This is FOUNDPAGE: ", foundPage);
-			// console.log("This is Page: ", Object.keys(Page));
-			// console.log("This is Page.collection.collection", Page.collection.collection)
-			},
-			function(err) {
-				res.send("You are hitting the error: ", err)
+				// res.json(foundPage);
+				res.render("wikipage", {"Page": foundPage});
 			})
+		.then(null, next);
 
 
 	// res.send("hit a dynamic route at " + urlTitle)
 })
 
 
+router.get("/:pageName/similar", function(req, res, next) {
 
+	var urlTitle = req.params.pageName
+
+	Page.findOne({"urlTitle": urlTitle}).exec()
+		.then(function(foundPage){
+				return foundPage.findSimilar()
+			})
+		.then(function(arrayOfSimilarPages) {
+				res.render("index", {"pages": arrayOfSimilarPages})
+			})
+		.then(null, next);
+})
 
 
 
